@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import gaps_config as gcfg
 from functools import partial
 
-class PortfolioOptimizer:
+class ConstraintHandler:
     WEIGHT_SUM_1 = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
     BOUNDS = [gcfg.ASSET_WEIGHT_CONSTRAINTS[asset] for asset in gcfg.FN_ORDER]
     
@@ -20,17 +20,25 @@ class PortfolioOptimizer:
     INITIAL_GUESS = np.array([1 / len(gcfg.FN_ORDER)] * len(gcfg.FN_ORDER))
 
     @staticmethod
-    def optimize_weights(objective_function, **objective_params):
+    def _apply_constraints_to_row(objective_function, **objective_params):
         obj_func = partial(objective_function, **objective_params)
         result = minimize(
             obj_func, 
-            PortfolioOptimizer.INITIAL_GUESS, 
-            constraints=PortfolioOptimizer.CONSTRAINTS, 
-            bounds=PortfolioOptimizer.BOUNDS, 
+            ConstraintHandler.INITIAL_GUESS, 
+            constraints=ConstraintHandler.CONSTRAINTS, 
+            bounds=ConstraintHandler.BOUNDS, 
             method='SLSQP', 
             options={'disp': False}
         )
         return result.x
+    
+    @staticmethod
+    def apply_constraints(weights_df, objective_function, **objective_params):
+        optimized_weights_df = pd.DataFrame(index=weights_df.index, columns=weights_df.columns)
+        for idx, row in weights_df.iterrows():
+            optimized_weights = ConstraintHandler._apply_constraints_to_row(objective_function, original_weights=row.values, **objective_params)
+            optimized_weights_df.loc[idx] = optimized_weights
+        return optimized_weights_df
 
 class Alpha:
     def __init__(self, author, weights_df):
