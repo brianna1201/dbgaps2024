@@ -1,5 +1,8 @@
 import fn_config
 
+FN_ORDER = fn_config.ASSET_ALIASES.values()
+ASSETS_TO_NUM = {asset: i for i, asset in enumerate(FN_ORDER)}
+
 GROUP_ALIASES = {
     '국내주식': 'kor_stock',
     '해외주식': 'foreign_stock',
@@ -21,6 +24,7 @@ GROUP_ASSETS = {
     'fx': ['usd', 'usdinv'],
     'cash': ['shortterm', 'cash'],
 }
+GROUP_TO_ASSETS_NUM = {group: [ ASSETS_TO_NUM[asset] for asset in assets ] for group, assets in GROUP_ASSETS.items()}
 
 ASSETS_GROUP = {asset: group for group, assets in GROUP_ASSETS.items() for asset in assets}
 

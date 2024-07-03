@@ -1,8 +1,9 @@
 import gaps_config as gcfg
-import fn_config as fncfg
 
 import pandas as pd
 import numpy as np
+
+from scipy.optimize import minimize
 
 class Alpha:
     """
@@ -61,7 +62,7 @@ class Alpha:
         Raises:
             AssertionError: If the format is invalid.
         """
-        assert all(col in fncfg.ASSET_ALIASES.values() for col in self.weights_df.columns), "Invalid asset names"
+        assert all(col in gcfg.FN_ORDER for col in self.weights_df.columns), "Invalid asset names"
         assert self.weights_df.index.is_monotonic_increasing, "Index is not sorted"
 
     def _validate_weights(self, tol=1e-6):
@@ -97,7 +98,7 @@ class Alpha:
         """
         Sorts the DataFrame columns based on predefined asset aliases.
         """
-        self.weights_df = self.weights_df[fncfg.ASSET_ALIASES.values()]
+        self.weights_df = self.weights_df[gcfg.FN_ORDER]
 
     def to_numpy(self):
         """
@@ -107,3 +108,33 @@ class Alpha:
             np.ndarray: The weights DataFrame as a NumPy array.
         """
         return self.weights_df.to_numpy()
+
+class ConstraintHandler:
+    WEIGHT_SUM_1 = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
+    BOUNDS = [gcfg.ASSET_WEIGHT_CONSTRAINTS[asset] for asset in gcfg.FN_ORDER]
+    GROUP_BOUNDS = [
+         {'type': 'ineq', 'fun': lambda w: np.sum(w[asset_indices_in_group]) - gcfg.GROUP_WEIGHT_CONSTRAINTS[group][0]} for group, asset_indices_in_group in gcfg.GROUP_TO_ASSETS_NUM.items()
+        ] + [
+         {'type': 'ineq', 'fun': lambda w: gcfg.GROUP_WEIGHT_CONSTRAINTS[group][1] - np.sum(w[asset_indices_in_group])} for group, asset_indices_in_group in gcfg.GROUP_TO_ASSETS_NUM.items()
+            ]
+    
+    CONSTRAINTS = [WEIGHT_SUM_1] + BOUNDS + GROUP_BOUNDS
+
+    INITIAL_GUESS = np.array([1/len(gcfg.FN_ORDER)] * len(gcfg.FN_ORDER))
+
+    @staticmethod
+    def obj_min_deviation(weights, original_weights):
+        return np.sum(np.abs(weights - original_weights))
+    
+    @staticmethod
+    def opt_truncate(weights, original_weights):
+        return minimize(
+            ConstraintHandler.obj_min_deviation, 
+            ConstraintHandler.INITIAL_GUESS, 
+            args=(original_weights,), 
+            constraints=ConstraintHandler.CONSTRAINTS, 
+            bounds=ConstraintHandler.BOUNDS, 
+            method='SLSQP', 
+            options={'disp': False}
+            ).x
+

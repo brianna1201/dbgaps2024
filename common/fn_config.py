@@ -1,20 +1,26 @@
 ASSET_ALIASES = {
-    '현금': 'cash',
-    'KOSEF 단기자금': 'shortterm',
+    'KODEX 200': 'kodex200',
+    'KODEX 200': 'kodex200',
+
+    'TIGER 코스닥150': 'kosdaq150',
+    'TIGER 코스닥150': 'kosdaq150',
+    'TIGER 코스닥150': 'kosdaq150',
+    'TIGER 차이나CSI300': 'csi300',
+
+    'KOSEF 국고채10년': '10y',
+    'KBSTAR 중기우량회사채': 'midbond',
+    'TIGER 단기선진하이일드(합성 H)': 'hybond',
+
+    'KODEX 골드선물(H)': 'gold',
+    'TIGER 원유선물Enhanced(H)': 'oil',
+
+    'KODEX 인버스': 'kodexinv',
+
     'KOSEF 미국달러선물': 'usd',
     'KOSEF 미국달러선물인버스': 'usdinv',
+    
+    'KOSEF 단기자금': 'shortterm',
     'KODEX 인버스': 'kodexinv',
-    'TIGER 원유선물Enhanced(H)': 'oil',
-    'KODEX 골드선물(H)': 'gold',
-    'TIGER 단기선진하이일드(합성 H)': 'hybond',
-    'KBSTAR 중기우량회사채': 'midbond',
-    'KOSEF 국고채10년': '10y',
-    'TIGER 차이나CSI300': 'csi300',
-    'ACE 일본Nikkei225(H)': 'nikkei',
-    'TIGER 유로스탁스50(합성 H)': 'euro50',
-    'TIGER 미국S&P500선물(H)': 'sp500',
-    'TIGER 코스닥150': 'kosdaq150',
-    'KODEX 200': 'kodex200',
 }
 
 ALIASES_ASSET = {v: k for k, v in ASSET_ALIASES.items()}
