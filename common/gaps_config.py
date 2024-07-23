@@ -79,3 +79,5 @@ ASSET_WEIGHT_CONSTRAINTS = {
     'shortterm': (0.0, 0.5),
     # 'cash': (0.01, 0.5),
 }
+
+TX_COST = 0.00015

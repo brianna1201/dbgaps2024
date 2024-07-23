@@ -8,7 +8,7 @@ ASSET_ALIASES = {
     'TIGER 차이나CSI300': 'csi300',
 
     'KOSEF 국고채10년': '10y',
-    'KBSTAR 중기우량회사채': 'midbond',
+    'RISE 중기우량회사채': 'midbond',
     'TIGER 단기선진하이일드(합성 H)': 'hybond',
 
     'KODEX 골드선물(H)': 'gold',
