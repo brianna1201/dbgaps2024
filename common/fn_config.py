@@ -1,10 +1,10 @@
 ASSET_ALIASES = {
     'KODEX 200': 'kodex200',
-    'KODEX 200': 'kodex200',
-
     'TIGER 코스닥150': 'kosdaq150',
-    'TIGER 코스닥150': 'kosdaq150',
-    'TIGER 코스닥150': 'kosdaq150',
+    
+    'TIGER 미국S&P500선물(H)': 'sp500',
+    'TIGER 유로스탁스50(합성 H)': 'euro50',
+    'ACE 일본Nikkei225(H)': 'nikkei',
     'TIGER 차이나CSI300': 'csi300',
 
     'KOSEF 국고채10년': '10y',
@@ -20,7 +20,7 @@ ASSET_ALIASES = {
     'KOSEF 미국달러선물인버스': 'usdinv',
     
     'KOSEF 단기자금': 'shortterm',
-    'KODEX 인버스': 'kodexinv',
+    # '현금': 'cash',
 }
 
 ALIASES_ASSET = {v: k for k, v in ASSET_ALIASES.items()}
