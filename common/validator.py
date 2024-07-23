@@ -1,109 +1,132 @@
-import gaps_config as gcfg
-import fn_config as fncfg
-
-import pandas as pd
 import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+import gaps_config as gcfg
+from functools import partial
+
+class ConstraintHandler:
+    WEIGHT_SUM_1 = {'type': 'eq', 'fun': lambda w: np.sum(w) - 0.99} # Because of cash
+    # BOUNDS = [gcfg.ASSET_WEIGHT_CONSTRAINTS[asset] for asset in gcfg.FN_ORDER]
+    BOUNDS = list(gcfg.ASSET_WEIGHT_CONSTRAINTS.values())
+    
+    # GROUP_CONSTRAINTS = [
+    #     {'type': 'ineq', 'fun': lambda w, idx=asset_indices,: np.sum(w[idx]) - gcfg.GROUP_WEIGHT_CONSTRAINTS[group][0]}
+    #     for group, asset_indices in gcfg.GROUP_TO_ASSETS_NUM.items()
+    # ] + [
+    #     {'type': 'ineq', 'fun': lambda w, idx=asset_indices: gcfg.GROUP_WEIGHT_CONSTRAINTS[group][1] - np.sum(w[idx])}
+    #     for group, asset_indices in gcfg.GROUP_TO_ASSETS_NUM.items()
+    # ]
+
+    # The above code has silent bug
+    # gcfg.GROUP_WEIGHT_CONSTRAINTS[group][0] 값이 제대로 불러와지지 않음. 근데 또 오류없이 그냥 실행은 됨. 
+    # GPT왈, lambda 와 list comprehension을 같이 쓸 때 생기는 Python closure 문제라고 함. 아직도 이해 안됨. 나중에 꼭 다시 알아보기. 어이가 없네.
+
+    # GROUP_CONSTRAINTS = [
+    #     {'type': 'ineq', 'fun': lambda w, idx=asset_indices, min_val=gcfg.GROUP_WEIGHT_CONSTRAINTS[group][0] : np.sum(w[idx]) - min_val}
+    #     for group, asset_indices in gcfg.GROUP_TO_ASSETS_NUM.items()
+    # ] + [
+    #     {'type': 'ineq', 'fun': lambda w, idx=asset_indices, max_val=gcfg.GROUP_WEIGHT_CONSTRAINTS[group][1] : max_val - np.sum(w[idx])}
+    #     for group, asset_indices in gcfg.GROUP_TO_ASSETS_NUM.items()
+    # ]
+
+    # The above code도, min_val은 제대로 불러와지나 max_val은 제대로 불러와지지 않음.
+    # 도대체 원인을 모르겠음. 
+    # 그래서 아래와 같이 list comprehension을 사용하지 않는 방법으로 수정함.
+
+    GROUP_LOWER_CONSTRAINTS = []
+    GROUP_UPPER_CONSTRAINTS = []
+    for group, asset_indices in gcfg.GROUP_TO_ASSETS_NUM.items():
+        min_val, max_val = gcfg.GROUP_WEIGHT_CONSTRAINTS[group]
+        GROUP_LOWER_CONSTRAINTS.append({'type': 'ineq', 'fun': lambda w, idx=asset_indices, min_val=min_val: np.sum(w[idx]) - min_val})
+        GROUP_UPPER_CONSTRAINTS.append({'type': 'ineq', 'fun': lambda w, idx=asset_indices, max_val=max_val: max_val - np.sum(w[idx])})
+    
+    GROUP_CONSTRAINTS = GROUP_LOWER_CONSTRAINTS + GROUP_UPPER_CONSTRAINTS
+
+    # 이제야 정상 작동됨. 확실히 list comprehension과 lambda를 같이 쓸 때 생기는 이해할 수 없는 오류가 있는 것 같음. 
+
+    CONSTRAINTS = [WEIGHT_SUM_1] + GROUP_CONSTRAINTS 
+    INITIAL_GUESS = np.array([1 / len(gcfg.FN_ORDER)] * len(gcfg.FN_ORDER))
+
+    @staticmethod
+    def _apply_constraints_to_row(objective_function, **objective_params):
+        obj_func = partial(objective_function, **objective_params)
+        result = minimize(
+            obj_func, 
+            ConstraintHandler.INITIAL_GUESS, 
+            constraints=ConstraintHandler.CONSTRAINTS, 
+            bounds=ConstraintHandler.BOUNDS, 
+            method='SLSQP', 
+            # options={'disp': True}
+        )
+        return result.x
+    
+    @staticmethod
+    def apply_constraints(weights_df, objective_function, **objective_params):
+        optimized_weights_df = pd.DataFrame(index=weights_df.index, columns=weights_df.columns)
+        for idx, row in weights_df.iterrows():
+            optimized_weights = ConstraintHandler._apply_constraints_to_row(objective_function, original_weights=row.values, **objective_params) # TODO: Fix objective param not working
+            # optimized_weights = ConstraintHandler._apply_constraints_to_row(objective_function, **objective_params)
+            optimized_weights_df.loc[idx] = optimized_weights
+        
+        return optimized_weights_df.astype(float)
 
 class Alpha:
-    """
-    The Alpha class is responsible for validating and managing an alpha weight DataFrame upon initialization. 
-    The class ensures that the DataFrame adheres to the required format, weight constraints, and sorting rules.
-
-    Attributes:
-        author (str): The author of the alpha instance.
-        weights_df (pd.DataFrame): The DataFrame containing asset weights.
-
-    Methods:
-        get_alpha(): Returns the validated weights DataFrame.
-        _validate_format(): Validates the format of the weights DataFrame.
-        _validate_weights(): Ensures that weights in the DataFrame sum to 1 for each row.
-        _validate_constraints(): Validates individual asset and group weight constraints.
-        _sort(): Sorts the DataFrame columns based on predefined asset aliases.
-        to_numpy(): Converts the weights DataFrame to a NumPy array.
-    """
-
-    def __init__(self, author, weights_df):
-        """
-        Initializes the Alpha instance and validates the provided weights DataFrame.
-
-        Parameters:
-            author (str): The author of the alpha instance.
-            weights_df (pd.DataFrame): The DataFrame containing asset weights.
-
-        Raises:
-            AssertionError: If any validation checks fail.
-        """
+    def __init__(self, author, weights_df, tol=1e-6):
+        self.tol = tol
         self.author = author
         self.weights_df = weights_df
+
+        self._sort()
 
         self._validate_format()
         self._validate_weights()
         self._validate_constraints()
-        self._sort()
+        
+
+        
 
     def get_alpha(self):
-        """
-        Returns the validated weights DataFrame.
-
-        Returns:
-            pd.DataFrame: The validated weights DataFrame.
-        """
         return self.weights_df
     
     def _validate_format(self):
-        """
-        Validates the format of the weights DataFrame.
-
-        Checks:
-            - The columns of the DataFrame must match the expected asset aliases.
-            - The index of the DataFrame must be sorted in ascending order.
-
-        Raises:
-            AssertionError: If the format is invalid.
-        """
-        assert all(col in fncfg.ASSET_ALIASES.values() for col in self.weights_df.columns), "Invalid asset names"
+        assert all(col in gcfg.FN_ORDER for col in self.weights_df.columns), "Invalid asset names"
         assert self.weights_df.index.is_monotonic_increasing, "Index is not sorted"
 
-    def _validate_weights(self, tol=1e-6):
-        """
-        Ensures that weights in the DataFrame sum to 1 for each row.
-
-        Raises:
-            AssertionError: If any row's weights do not sum to 1.
-        """
-        assert np.isclose(self.weights_df.sum(axis=1), 1, atol=tol).all(), "Weights do not sum to approximately 1"
+    def _validate_weights(self):
+        # assert np.isclose(self.weights_df.sum(axis=1), 1, atol=tol).all(), "Weights do not sum to approximately 1"
+        assert np.isclose(self.weights_df.sum(axis=1), 0.99, atol=self.tol).all(), "Weights do not sum to approximately 0.99 (= 1 - 0.01 cash)"
 
     def _validate_constraints(self):
-        """
-        Validates individual asset and group weight constraints.
+        def is_within_bounds(series, min_val, max_val):
+            return np.isclose(series, min_val, atol=self.tol) | np.isclose(series, max_val, atol=self.tol) | ((series > min_val) & (series < max_val))
 
-        Individual Asset Constraints:
-            Ensures each asset's weight is within specified constraints.
+        for col in self.weights_df.columns:
+            min_val, max_val = gcfg.ASSET_WEIGHT_CONSTRAINTS[col]
+            if not is_within_bounds(self.weights_df[col], min_val, max_val).all():
+                invalid_values = self.weights_df[~is_within_bounds(self.weights_df[col], min_val, max_val)]
+                print(f"Failed column '{col}':\n{invalid_values}")
+                assert False, f"Individual asset weight constraints violated in column '{col}' / {min_val} ~ {max_val} / with values:\n{invalid_values}"
 
-        Group Constraints:
-            Ensures the sum of weights for asset groups is within specified constraints.
-
-        Raises:
-            AssertionError: If any constraints are violated.
-        """
-        # Individual asset constraints
-        assert self.weights_df.apply(lambda col: col.between(*gcfg.ASSET_WEIGHT_CONSTRAINTS[col.name]), axis=0).all().all(), "Individual asset weight constraints violated"
-
-        # Group constraints
         for group, assets in gcfg.GROUP_ASSETS.items():
-            assert self.weights_df[assets].sum(axis=1).between(*gcfg.GROUP_WEIGHT_CONSTRAINTS[group]).all(), f"Group constraint violated for {group}"
+            group_sums = self.weights_df[assets].sum(axis=1)
+            min_val, max_val = gcfg.GROUP_WEIGHT_CONSTRAINTS[group]
+            if not is_within_bounds(group_sums, min_val, max_val).all():
+                invalid_group_values = group_sums[~is_within_bounds(group_sums, min_val, max_val)]
+                print(f"Failed group '{group}':\n{invalid_group_values}")
+                assert False, f"Group constraint violated for '{group}' / {min_val} ~ {max_val} / with values:\n{invalid_group_values}"
 
     def _sort(self):
-        """
-        Sorts the DataFrame columns based on predefined asset aliases.
-        """
-        self.weights_df = self.weights_df[fncfg.ASSET_ALIASES.values()]
+        self.weights_df = self.weights_df[gcfg.FN_ORDER]
 
     def to_numpy(self):
-        """
-        Converts the weights DataFrame to a NumPy array.
-
-        Returns:
-            np.ndarray: The weights DataFrame as a NumPy array.
-        """
         return self.weights_df.to_numpy()
+
+# Example objective functions
+def obj_mse(weights, original_weights):
+    return np.sum( (weights - original_weights) ** 2 )
+
+def obj_max_sharpe(weights, expected_returns, cov_matrix, risk_free_rate):
+    portfolio_return = np.dot(weights, expected_returns)
+    portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_std_dev
+    return -sharpe_ratio
