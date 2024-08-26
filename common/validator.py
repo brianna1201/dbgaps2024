@@ -73,6 +73,7 @@ class ConstraintHandler:
 class Alpha:
     def __init__(self, author, weights_df, tol=1e-6):
         self.tol = tol
+        assert len(author) <= 9, "Author name too long. It should be less than 10 characters"
         self.author = author
         self.weights_df = weights_df
 
@@ -82,7 +83,7 @@ class Alpha:
         self._validate_weights()
         self._validate_constraints()
         
-
+        self.dates = self.weights_df.index
         
 
     def get_alpha(self):
@@ -120,7 +121,11 @@ class Alpha:
 
     def to_numpy(self):
         return self.weights_df.to_numpy()
-
+    
+    def reindex_dates(self, dates):
+        assert all(date in dates for date in self.dates), "Reindex dates not a subset of original dates"
+        self.weights_df = self.weights_df.reindex(dates)
+        
 # Example objective functions
 def obj_mse(weights, original_weights):
     return np.sum( (weights - original_weights) ** 2 )
