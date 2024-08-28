@@ -78,7 +78,30 @@ class AdaptiveWeight(Ensemble):
         alpha_returns_df = pd.concat(alpha_returns, axis=1)
         alpha_returns_df.columns = self.alpha_names
 
-        pass # TODO: Apply adaptive weight logic
+        alpha_weights_2d = alpha_returns_df.rolling(window=performance_window).mean().to_numpy() # lookback window will make it NaN for first performance_window days
+        
+        def normalize_weights(signals_2d, axis=1):
+            # min max normalization to ensemble weights
+            signals_min = np.nanmin(signals_2d, axis=axis, keepdims=True)
+            signals_max = np.nanmax(signals_2d, axis=axis, keepdims=True)
+            minmax_2d = (signals_2d - signals_min) / (signals_max - signals_min)
+            
+            # scale to sum to 1
+            minmax_sum = np.nansum(minmax_2d, axis=axis, keepdims=True)
+            sum_to_1 = minmax_2d / minmax_sum
+
+            return sum_to_1
+        
+        alpha_weights_2d = normalize_weights(alpha_weights_2d, axis=1)
+        
+        stacked_alphas = np.stack(self.alphas, axis=1)
+        ensemble_weights_2d = np.einsum('ij, ijk -> ik', alpha_weights_2d, stacked_alphas)
+
+        ensemble_weights_df = pd.DataFrame(ensemble_weights_2d, index=self.returns_df.index, columns=self.returns_df.columns)
+
+        return Alpha("Ensemble", ensemble_weights_df)
+
+            
 
 
 
