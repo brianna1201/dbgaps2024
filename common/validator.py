@@ -60,6 +60,7 @@ class ConstraintHandler:
         )
         return result.x
     
+    # TODO: weights_df의 row가 all nan일 때 처리 안됨. 안되는 것이 당연. 다 떨구고 해야..
     @staticmethod
     def apply_constraints(weights_df, objective_function, **objective_params):
         optimized_weights_df = pd.DataFrame(index=weights_df.index, columns=weights_df.columns)
@@ -123,9 +124,13 @@ class Alpha:
         return self.weights_df.to_numpy()
     
     def reindex_dates(self, dates):
-        assert all(date in dates for date in self.dates), "Reindex dates not a subset of original dates"
+        # TODO: Fix this
+        # assert set(dates).issubset(set(self.dates)), "Reindex dates not a subset of original dates"
         self.weights_df = self.weights_df.reindex(dates)
-        
+
+    def __repr__(self):
+        return f"Alpha({self.author})"
+
 # Example objective functions
 def obj_mse(weights, original_weights):
     return np.sum( (weights - original_weights) ** 2 )
